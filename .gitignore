@@ -1,0 +1,19 @@
+.pypirc
+
+# Build files
+dist/
+build/
+*.egg-info/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment
+venv/
+env/
+.env/
+
+# IDE
+.vscode/
+.idea/ 
