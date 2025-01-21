@@ -1,0 +1,17 @@
+https://github.com/workwhileweb/ProxyTunnel
+
+https://pypi.org/project/proxytunnel/
+https://pypi.org/project/proxytunnel/0.1.0/
+
+https://github.com/proxytunnel/proxytunnel
+https://github.com/proxytunnel/proxytunnel/releases/download/v1.12.2/proxytunnel-v1.12.2-x86_64-windows-msys.zip
+
+python -m build
+python -m twine upload --repository testpypi dist/*
+pip install --index-url https://test.pypi.org/simple/ proxytunnel
+python -m twine upload dist/*
+
+twine upload --config-file=.pypirc dist/*
+
+
+https://packaging.python.org/en/latest/specifications/pypirc/

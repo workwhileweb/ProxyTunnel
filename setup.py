@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="proxytunnel",
-    version="0.1.0",
+    version="0.1.1",
     author="workwhileweb",
     author_email="workwhileweb@gmail.com",
     description="fast forward proxy tunnel",

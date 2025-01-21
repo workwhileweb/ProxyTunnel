@@ -1,9 +1,9 @@
 import os
-import sys
 import subprocess
 import requests
 import atexit
 import socket
+import zipfile
 from pathlib import Path
 
 
@@ -34,29 +34,42 @@ class ProxyTunnel:
             return port
 
     def _ensure_executable(self):
-        """Ensures proxytunnel.exe exists, downloads if not present."""
+        """Ensures proxytunnel.exe exists, downloads and extracts if not present."""
         # Get the user's home directory
         home = str(Path.home())
         exe_dir = os.path.join(home, ".proxytunnel")
-        self.exe_path = os.path.join(exe_dir, "proxytunnel.exe")
+        bin_dir = os.path.join(exe_dir, "bin")
+        self.exe_path = os.path.join(bin_dir, "proxytunnel.exe")
 
-        # Create directory if it doesn't exist
-        os.makedirs(exe_dir, exist_ok=True)
+        # Create directories if they don't exist
+        os.makedirs(bin_dir, exist_ok=True)
 
         # Check if executable exists
         if not os.path.exists(self.exe_path):
-            print("Downloading proxytunnel.exe...")
-            # URL for the proxytunnel executable
-            url = "https://github.com/proxytunnel/proxytunnel/releases/latest/download/proxytunnel.exe"
+            print("Downloading proxytunnel zip...")
+            # URL for the proxytunnel zip file
+            home = "https://github.com/proxytunnel/proxytunnel/"
+            url = home + "releases/download/v1.12.2/proxytunnel-v1.12.2-x86_64-windows-msys.zip"
+            zip_path = os.path.join(exe_dir, "proxytunnel.zip")
+
             try:
+                # Download zip file
                 response = requests.get(url, stream=True)
                 response.raise_for_status()
-                with open(self.exe_path, "wb") as f:
+                with open(zip_path, "wb") as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
-                print("Successfully downloaded proxytunnel.exe")
+
+                # Extract zip file
+                print("Extracting proxytunnel.exe...")
+                with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                    zip_ref.extractall(bin_dir)
+
+                # Remove zip file after extraction
+                # os.remove(zip_path)
+                print("Successfully installed proxytunnel.exe")
             except Exception as e:
-                raise RuntimeError(f"Failed to download proxytunnel.exe: {str(e)}")
+                raise RuntimeError(f"Failed to install proxytunnel.exe: {str(e)}")
 
     def kill(self):
         """Kill the running proxytunnel process if it exists"""
@@ -69,7 +82,34 @@ class ProxyTunnel:
             finally:
                 self.process = None
 
-    def forward(self, local_port: int, remote_proxy: str):
+    def parse_proxy(self, proxy: str) -> tuple[str, str | None, str]:
+        """
+        Parse the proxy string into components.
+
+        Args:
+            proxy (str): Proxy string in format http://user:pass@host:port
+
+        Returns:
+            tuple: (proxy_type, auth, address) where:
+                - proxy_type: The proxy protocol (e.g., 'http')
+                - auth: Basic auth string 'user:pass' or None if no auth
+                - address: The proxy address in format 'host:port'
+        """
+        # Split protocol and rest
+        if "://" in proxy:
+            proxy_type, rest = proxy.split("://", 1)
+        else:
+            proxy_type, rest = "http", proxy
+
+        # Split auth and address
+        if "@" in rest:
+            auth, address = rest.split("@", 1)
+        else:
+            auth, address = None, rest
+
+        return proxy_type.lower(), auth, address
+
+    def forward(self, local_port: int, remote_proxy: str) -> subprocess.Popen:
         """
         Forward local port to remote proxy using proxytunnel.exe
 
@@ -83,10 +123,17 @@ class ProxyTunnel:
         if not self.exe_path or not os.path.exists(self.exe_path):
             raise RuntimeError("proxytunnel.exe not found")
 
-        cmd = [self.exe_path, "-L", str(local_port), "-P", remote_proxy]
+        local = f"127.0.0.1:{local_port}"
+        _, auth, address = self.parse_proxy(remote_proxy)
+
+        if auth:
+            cmd = [self.exe_path, f"--standalone={local}", f"--proxyauth={auth}", f"--proxy={address}"]
+        else:
+            cmd = [self.exe_path, f"--standalone={local}", f"--proxy={address}"]
 
         try:
             self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            print(f"Proxy tunnel {self.process.pid} : {cmd}")
             return self.process
         except Exception as e:
             self.process = None
